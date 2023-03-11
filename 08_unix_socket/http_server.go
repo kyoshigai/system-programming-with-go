@@ -1,0 +1,57 @@
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"io"
+	"log"
+	"net"
+	"net/http"
+	"net/http/httputil"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+func main() {
+	path := filepath.Join(os.TempDir(), "unixdomainsocket-sample")
+	os.Remove(path)
+
+	listener, err := net.Listen("unix", path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer listener.Close()
+
+	fmt.Println("Server is running at " + path)
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		go func() {
+			fmt.Printf("Accept %v\n", conn.RemoteAddr())
+
+			request, err := http.ReadRequest(bufio.NewReader(conn))
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			dump, err := httputil.DumpRequest(request, true)
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Println(string(dump))
+
+			response := http.Response{
+				StatusCode: 200, ProtoMajor: 1, ProtoMinor: 0,
+				Body: io.NopCloser(
+					strings.NewReader("Hello World\n")),
+			}
+			response.Write(conn)
+			conn.Close()
+		}()
+	}
+}
